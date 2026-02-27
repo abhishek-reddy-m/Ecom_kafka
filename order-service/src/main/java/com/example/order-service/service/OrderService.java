@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.List;
 
 @Service
 public class OrderService {
@@ -33,6 +34,10 @@ public class OrderService {
         orderEventProducer.sendOrderCreatedEvent(event);
 
         return savedOrder;
+    }
+
+    public List<Order> getAllOrders() {
+        return orderRepository.findAll();
     }
 
     private OrderCreatedEvent mapToEvent(Order order) {
