@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # ─── Zookeeper ───────────────────────────────────────────────────────────────
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: zookeeper
@@ -9,17 +10,71 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
     ports:
       - "2181:2181"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo ruok | nc localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
+  # ─── Kafka Broker ────────────────────────────────────────────────────────────
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     container_name: kafka
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_healthy
     ports:
       - "9092:9092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_INTERNAL://0.0.0.0:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # ─── Kafka UI (Monitor topics & messages at http://localhost:8080) ──────────
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+
+# ─── Kafka Topics (auto-created by Spring Boot on startup) ───────────────────
+# order.created       → produced by order-service    (port 8081)
+# payment.processed   → produced by payment-service  (port 8082)
+# payment.failed      → produced by payment-service  (port 8082)
+# inventory.reserved  → produced by inventory-service (port 8083)
+# inventory.failed    → produced by inventory-service (port 8083)
+#
+# ─── Service Ports ───────────────────────────────────────────────────────────
+# order-service:        http://localhost:8081  POST /orders
+# payment-service:      http://localhost:8082  GET  /payments
+# inventory-service:    http://localhost:8083  GET  /inventory, POST /inventory
+# notification-service: http://localhost:8084  (consumers only)
+# kafka-ui:             http://localhost:8080
+#
+# ─── Start infrastructure ────────────────────────────────────────────────────
+# docker-compose up -d
+#
+# ─── Run services (each in separate terminal) ────────────────────────────────
+# cd order-service        && mvn spring-boot:run
+# cd payment-service      && mvn spring-boot:run
+# cd inventory-service    && mvn spring-boot:run
+# cd notification-service && mvn spring-boot:run
