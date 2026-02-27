@@ -13,9 +13,9 @@
     </parent>
 
     <groupId>com.example</groupId>
-    <artifactId>order-service</artifactId>
+    <artifactId>inventory-service</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>order-service</name>
+    <name>inventory-service</name>
 
     <properties>
         <java.version>21</java.version>

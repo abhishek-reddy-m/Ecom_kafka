@@ -2,12 +2,21 @@ package com.example.orderservice.service;
 
 import com.example.orderservice.dto.OrderCreatedEvent;
 import com.example.orderservice.entity.Order;
+import com.example.orderservice.kafka.OrderEventProducer;
+import com.example.orderservice.repository.OrderRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 
 @Service
 public class OrderService {
+
+    @Autowired
+    private OrderRepository orderRepository;
+
+    @Autowired
+    private OrderEventProducer orderEventProducer;
 
     public Order createOrder(String userId, String productId, int quantity, double price) {
         Order order = Order.builder()
@@ -19,12 +28,14 @@ public class OrderService {
                 .createdAt(Instant.now())
                 .build();
 
-        // Here you would save the order to the database, e.g., orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+        OrderCreatedEvent event = mapToEvent(savedOrder);
+        orderEventProducer.sendOrderCreatedEvent(event);
 
-        return order;
+        return savedOrder;
     }
 
-    public OrderCreatedEvent mapToEvent(Order order) {
+    private OrderCreatedEvent mapToEvent(Order order) {
         return OrderCreatedEvent.builder()
                 .orderId(order.getOrderId())
                 .userId(order.getUserId())
